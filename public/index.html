@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arsenal - HACKI C2</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0e17; color: #e0e0e0; min-height: 100vh; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 26px; font-weight: 700; color: #4fc3f7; margin-bottom: 2px; }
+    h1 span { color: #8892a4; font-weight: 400; font-size: 15px; }
+    .subtitle { color: #5a6a84; margin-bottom: 20px; font-size: 13px; }
+    /* Tab bar */
+    .tab-bar { display: flex; gap: 0; margin: 0 auto; max-width: 1100px; padding: 12px 16px 0; }
+    .tab-btn { padding: 9px 22px; background: #141a2a; border: 1px solid #1e2940; border-bottom: none; border-radius: 8px 8px 0 0; color: #5a6a84; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; font-family: inherit; }
+    .tab-btn:hover { color: #4fc3f7; }
+    .tab-btn.active { background: #0a0e17; color: #4fc3f7; border-color: #4fc3f7; border-bottom: 1px solid #0a0e17; position: relative; z-index: 1; }
+    .tab-divider { border-bottom: 1px solid #1e2940; margin-top: -1px; max-width: 1100px; margin-left: auto; margin-right: auto; }
+    #deploy-root { display: none; }
+    /* Panels & cards */
+    .panel { background: #141a2a; border: 1px solid #1e2940; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .panel-dark { background: #0d1220; border: 1px solid #1e2940; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .row-stretch { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+    select, input[type="text"] { padding: 8px 12px; border-radius: 6px; border: 1px solid #2a3550; background: #0d1220; color: #e0e0e0; font-size: 13px; outline: none; font-family: inherit; }
+    select { min-width: 140px; }
+    .inp-wide { flex: 1; min-width: 180px; }
+    .btn { padding: 8px 20px; border-radius: 6px; border: none; font-weight: 700; font-size: 13px; cursor: pointer; transition: all .15s; font-family: inherit; }
+    .btn-p { background: #4fc3f7; color: #0a0e17; }
+    .btn-p:hover { background: #81d4fa; }
+    .btn-d { background: #ff4444; color: #fff; }
+    .btn-d:hover { background: #ff6666; }
+    .btn-g { background: transparent; border: 1px solid #2a3550; color: #8892a4; }
+    .btn-g:hover { border-color: #4fc3f7; color: #4fc3f7; }
+    .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 4px; }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-run { background: #4caf50; color: #fff; font-size: 11px; padding: 3px 10px; border-radius: 4px; border: none; cursor: pointer; font-weight: 700; }
+    .btn-run:hover { background: #66bb6a; }
+    /* Presets */
+    .preset-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .preset { padding: 5px 12px; border-radius: 16px; border: 1px solid #2a3550; background: #141a2a; color: #8892a4; font-size: 11px; cursor: pointer; transition: all .15s; font-family: inherit; }
+    .preset:hover { border-color: #4fc3f7; color: #4fc3f7; }
+    .preset.active { border-color: #4fc3f7; background: #1a2236; color: #4fc3f7; }
+    /* Terminal */
+    .terminal { background: #0a0e17; border: 1px solid #1e2940; border-radius: 8px; padding: 12px; font-family: 'Courier New', monospace; font-size: 11px; color: #4caf50; white-space: pre-wrap; max-height: 350px; overflow-y: auto; line-height: 1.5; margin-bottom: 12px; min-height: 60px; }
+    .term-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .term-status { font-size: 11px; font-weight: 600; }
+    .term-status.running { color: #ffd700; }
+    .term-status.done { color: #4caf50; }
+    .term-status.error { color: #ff4444; }
+    .blink { animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    /* Error / info banners */
+    .banner { padding: 12px; border-radius: 8px; margin-bottom: 14px; font-size: 12px; font-weight: 600; }
+    .banner-err { background: #2a1015; border: 1px solid #ff4444; color: #ff6b6b; }
+    .banner-ok { background: #1a2e1a; border: 1px solid #4caf50; color: #4caf50; }
+    .banner-info { background: #141a2a; border: 1px solid #4fc3f7; color: #4fc3f7; }
+    /* Badge */
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #000; }
+    .badge-critical { background: #ff4444; }
+    .badge-high { background: #ff8c00; }
+    .badge-medium { background: #ffd700; }
+    .badge-low { background: #4caf50; }
+    .badge-info { background: #4fc3f7; }
+    /* Stats */
+    .stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    .stat-card { background: #141a2a; border: 1px solid #1e2940; border-radius: 8px; padding: 12px 16px; text-align: center; min-width: 80px; }
+    .stat-card .val { font-size: 24px; font-weight: 700; color: #4fc3f7; }
+    .stat-card .lbl { font-size: 10px; color: #8892a4; margin-top: 2px; }
+    /* Host card (collapsible) */
+    .host-card { background: #141a2a; border: 1px solid #1e2940; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+    .host-header { padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background .15s; }
+    .host-header:hover { background: #1a2236; }
+    .host-arrow { color: #4fc3f7; font-size: 12px; transition: transform .2s; }
+    .host-arrow.open { transform: rotate(90deg); }
+    .host-ip { color: #4fc3f7; font-weight: 700; font-size: 14px; }
+    .host-meta { color: #5a6a84; font-size: 12px; }
+    .host-body { padding: 0 16px 16px; display: none; }
+    .host-body.open { display: block; }
+    .port-tags { display: flex; gap: 5px; flex-wrap: wrap; margin: 8px 0; }
+    .port-tag { background: #1a2236; border: 1px solid #2a3550; border-radius: 4px; padding: 2px 7px; font-size: 11px; color: #8892a4; }
+    .port-tag .svc { color: #4fc3f7; margin-left: 3px; }
+    /* Attack cards */
+    .atk-card { background: #0d1220; border: 1px solid #1e2940; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; }
+    .atk-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .atk-name { font-weight: 700; font-size: 13px; color: #e0e0e0; }
+    .atk-port { font-family: monospace; font-size: 11px; color: #8892a4; }
+    .atk-conf { font-size: 10px; color: #5a6a84; margin-left: auto; }
+    .atk-desc { font-size: 11px; color: #5a6a84; margin-top: 4px; }
+    .atk-bottom { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .dev-tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 4px; background: #1a2236; border: 1px solid #2a3550; font-size: 10px; color: #8892a4; cursor: default; }
+    .tool-tag { font-family: monospace; font-size: 10px; color: #4fc3f7; background: #141a2a; border: 1px solid #2a3550; padding: 2px 6px; border-radius: 3px; }
+    .tool-na { color: #5a6a84; }
+    /* Section headers */
+    .sec-h { font-size: 15px; color: #4fc3f7; margin: 20px 0 10px; display: flex; align-items: center; gap: 8px; }
+    .sec-h .cnt { font-size: 11px; color: #5a6a84; }
+    /* Filters */
+    .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .filter-chip { padding: 3px 10px; border-radius: 12px; border: 1px solid #2a3550; background: #141a2a; color: #8892a4; font-size: 10px; cursor: pointer; }
+    .filter-chip.on { border-color: #4fc3f7; color: #4fc3f7; background: #1a2236; }
+    /* Nmap raw */
+    .nmap-raw { background: #0d1220; border: 1px solid #1e2940; border-radius: 8px; padding: 14px; font-family: monospace; font-size: 11px; color: #5a6a84; white-space: pre-wrap; max-height: 250px; overflow-y: auto; }
+    /* Device panel */
+    .dev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .dev-card { background: #141a2a; border: 1px solid #1e2940; border-radius: 8px; padding: 14px; transition: all .15s; }
+    .dev-card:hover { border-color: #4fc3f7; }
+    .dev-card .dev-name { font-weight: 700; font-size: 14px; color: #e0e0e0; }
+    .dev-card .dev-type { font-size: 11px; color: #5a6a84; margin-top: 2px; }
+    .dev-card .dev-info { font-size: 11px; color: #8892a4; margin-top: 6px; }
+    .dev-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+    .dev-status.online { background: #4caf50; box-shadow: 0 0 4px #4caf50; }
+    .dev-status.offline { background: #ff4444; }
+    .dev-pld-status { font-size: 10px; padding: 2px 6px; border-radius: 3px; display: inline-block; margin: 2px 1px; }
+    .pld-queued { background: #1a2236; color: #ffd700; border: 1px solid #ffd700; }
+    .pld-delivered { background: #1a2236; color: #4fc3f7; border: 1px solid #4fc3f7; }
+    .pld-acked { background: #1a2236; color: #81d4fa; border: 1px solid #81d4fa; }
+    .pld-executed { background: #1a2e1a; color: #4caf50; border: 1px solid #4caf50; }
+    .pld-failed { background: #2a1015; color: #ff4444; border: 1px solid #ff4444; }
+    .push-textarea { width: 100%; min-height: 120px; background: #0d1220; border: 1px solid #2a3550; border-radius: 6px; color: #4caf50; font-family: 'Courier New', monospace; font-size: 11px; padding: 10px; resize: vertical; outline: none; }
+    .push-textarea:focus { border-color: #4fc3f7; }
+    #devices-root { display: none; }
+    /* Push to device dropdown in attack cards */
+    .btn-push { background: #ff8c00; color: #000; font-size: 11px; padding: 3px 10px; border-radius: 4px; border: none; cursor: pointer; font-weight: 700; }
+    .btn-push:hover { background: #ffa040; }
+    /* Responsive tweaks */
+    @media (max-width: 700px) {
+      .stats { gap: 6px; }
+      .stat-card { min-width: 60px; padding: 8px 10px; }
+      .stat-card .val { font-size: 18px; }
+      .dev-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-attack" onclick="switchTab('attack')">Attack Planner</button>
+  <button class="tab-btn" id="tab-deploy" onclick="switchTab('deploy')">Device Deploy</button>
+  <button class="tab-btn" id="tab-devices" onclick="switchTab('devices')">Devices</button>
+</div>
+<div class="tab-divider"></div>
+<div id="root"></div>
+<div id="deploy-root"></div>
+<div id="devices-root"></div>
+
+<script>
+function switchTab(tab) {
+  var tabs = ['attack','deploy','devices'];
+  var roots = { attack: document.getElementById('root'), deploy: document.getElementById('deploy-root'), devices: document.getElementById('devices-root') };
+  var btns = { attack: document.getElementById('tab-attack'), deploy: document.getElementById('tab-deploy'), devices: document.getElementById('tab-devices') };
+  tabs.forEach(function(t) {
+    if (roots[t]) roots[t].style.display = t === tab ? '' : 'none';
+    if (btns[t]) btns[t].className = t === tab ? 'tab-btn active' : 'tab-btn';
+  });
+  if (tab === 'devices' && window.devicesApp) window.devicesApp.refresh();
+}
+</script>
+
+<script>
+/* ================================================================
+   Arsenal Exec Tab v3 — Full Scan + Attack Plan + One-Click Exec
+   Vanilla JS, ingen React afhængighed.
+   ================================================================ */
+(function() {
+  var root = document.getElementById('root');
+
+  // ── State ──
+  var tools = [];
+  var presets = [];
+  var selectedTool = 'nmap';
+  var selectedPreset = null;
+  var target = '';
+  var customArgs = '';
+  var currentJob = null;   // { id, status, output, tool, target }
+  var pollTimer = null;
+  var attackPlan = null;
+  var showPlan = false;
+  var showTerminal = false;
+  var error = null;
+  var view = 'scan';       // 'scan' | 'run'
+  // Filters
+  var filterSev = null;    // null = all
+  var filterDevice = null; // null = all
+  var expandedHosts = {};  // ip → boolean
+
+  // SEVERITY_COLORS constant for badge rendering
+  var SEVERITY_COLORS = { critical: '#ff4444', high: '#ff8c00', medium: '#ffd700', low: '#4caf50', info: '#4fc3f7' };
+
+  // ── Init: fetch tools + presets ──
+  function init() {
+    fetch('/api/arsenal/tools').then(function(r){ return r.json(); }).then(function(d){ tools = d.tools || []; render(); });
+    fetch('/api/arsenal/presets').then(function(r){ return r.json(); }).then(function(d){ presets = d.presets || []; render(); });
+    render();
+  }
+
+  // ── Escape HTML ──
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ══════════════════════════════════════════════
+  // ── RENDER ──
+  // ══════════════════════════════════════════════
+  function render() {
+    var h = '<div class="wrap">';
+    h += '<h1>Arsenal <span>// Attack Planner</span></h1>';
+    h += '<p class="subtitle">Scan mål, analysér services, og generer en angrebsplan med device- og tool-suggestions.</p>';
+
+    if (error) h += '<div class="banner banner-err">' + esc(error) + '</div>';
+
+    // ── Tool + Preset + Target bar ──
+    h += renderToolBar();
+
+    // ── Terminal output (when running/done) ──
+    if (showTerminal && currentJob) {
+      h += renderTerminal();
+    }
+
+    // ── Attack Plan Panel ──
+    if (showPlan && attackPlan) {
+      h += renderAttackPlan();
+    }
+
+    h += '</div>';
+    root.innerHTML = h;
+    bindEvents();
+  }
+
+  // ── Tool bar ──
+  function renderToolBar() {
+    var h = '';
+    // Presets
+    h += '<div class="preset-bar">';
+    for (var i = 0; i < presets.length; i++) {
+      var p = presets[i];
+      var cls = 'preset' + (selectedPreset === p.id ? ' active' : '');
+      h += '<button class="' + cls + '" data-preset="' + p.id + '" title="' + esc(p.desc) + '">' + esc(p.name) + '</button>';
+    }
+    h += '</div>';
+
+    // Tool selector + target + args + buttons
+    h += '<div class="panel">';
+    h += '<div class="row" style="margin-bottom:8px">';
+    // Tool select
+    h += '<select id="tool-sel">';
+    for (var j = 0; j < tools.length; j++) {
+      var t = tools[j];
+      var sel = t.id === selectedTool ? ' selected' : '';
+      var inst = t.installed ? '' : ' [NOT INSTALLED]';
+      h += '<option value="' + t.id + '"' + sel + '>' + esc(t.name) + inst + '</option>';
+    }
+    h += '</select>';
+
+    // Target
+    h += '<input type="text" id="target-input" class="inp-wide" placeholder="Target IP / hostname / CIDR" value="' + esc(target) + '">';
+
+    // Kør button
+    var isRunning = currentJob && currentJob.status === 'running';
+    if (isRunning) {
+      h += '<button class="btn btn-d" id="kill-btn">Stop</button>';
+    } else {
+      h += '<button class="btn btn-p" id="run-btn">Kør</button>';
+    }
+    h += '</div>';
+
+    // Custom args row
+    h += '<div class="row">';
+    h += '<input type="text" id="args-input" class="inp-wide" placeholder="Custom args (eller vælg preset ovenfor)" value="' + esc(customArgs) + '" style="font-family:monospace;font-size:12px">';
+    h += '</div>';
+    h += '</div>';
+
+    return h;
+  }
+
+  // ── Terminal ──
+  function renderTerminal() {
+    var j = currentJob;
+    var h = '';
+    h += '<div class="term-header">';
+    h += '<span style="font-size:12px;color:#4fc3f7;font-weight:700">' + esc(j.tool) + ' → ' + esc(j.target) + '</span>';
+    var stCls = j.status === 'running' ? 'running' : j.status === 'done' ? 'done' : 'error';
+    h += '<span class="term-status ' + stCls + '">' + j.status.toUpperCase();
+    if (j.status === 'running') h += ' <span class="blink">●</span>';
+    h += '</span>';
+    h += '</div>';
+    h += '<div class="terminal" id="term-output">' + esc(j.output || 'Venter på output...') + '</div>';
+
+    // Action buttons under terminal
+    h += '<div class="row">';
+    if (j.status === 'done' && (j.tool === 'nmap' || j.tool === 'masscan')) {
+      h += '<button class="btn btn-p" id="analyze-btn">Analysér Scan</button>';
+    }
+    h += '<button class="btn btn-g btn-sm" id="clear-term-btn">Ryd Terminal</button>';
+    h += '</div>';
+
+    return h;
+  }
+
+  // ══════════════════════════════════════════════
+  // ── ATTACK PLAN RENDER ──
+  // ══════════════════════════════════════════════
+  function renderAttackPlan() {
+    var plan = attackPlan;
+    var h = '';
+
+    // ── Header with severity badges ──
+    h += '<div class="sec-h" style="margin-top:24px;font-size:20px">ATTACK PLAN';
+    var sevs = ['critical','high','medium','low','info'];
+    for (var si = 0; si < sevs.length; si++) {
+      var sv = sevs[si];
+      var cnt = plan.summary[sv] || 0;
+      if (cnt > 0) h += ' <span class="badge badge-' + sv + '">' + cnt + ' ' + sv + '</span>';
+    }
+    h += '</div>';
+
+    // ── Stats ──
+    h += '<div class="stats">';
+    h += statCard('Hosts', plan.summary.totalHosts, '');
+    h += statCard('Attacks', plan.summary.totalAttacks, '');
+    h += statCard('Critical', plan.summary.critical || 0, '#ff4444');
+    h += statCard('High', plan.summary.high || 0, '#ff8c00');
+    h += statCard('Medium', plan.summary.medium || 0, '#ffd700');
+    h += statCard('Low', plan.summary.low || 0, '#4caf50');
+    if (plan.summary.info) h += statCard('Info', plan.summary.info, '#4fc3f7');
+    if (plan.summary.deviceTypes) h += statCard('Devices', plan.summary.deviceTypes.length, '#8892a4');
+    h += '</div>';
+
+    // ── Filter bar ──
+    h += '<div class="filter-bar">';
+    h += '<span style="font-size:10px;color:#5a6a84;line-height:22px">Filter:</span>';
+    var allSevs = ['critical','high','medium','low','info'];
+    for (var fi = 0; fi < allSevs.length; fi++) {
+      var fsv = allSevs[fi];
+      var fon = filterSev === fsv ? ' on' : '';
+      h += '<span class="filter-chip' + fon + '" data-filter-sev="' + fsv + '">' + fsv + '</span>';
+    }
+    if (filterSev) h += '<span class="filter-chip" data-filter-sev="">alle</span>';
+    h += '</div>';
+
+    // ── Per-host sections ──
+    for (var hi = 0; hi < plan.hosts.length; hi++) {
+      var host = plan.hosts[hi];
+      var isOpen = expandedHosts[host.ip] !== false; // default open
+      var arrowCls = isOpen ? 'host-arrow open' : 'host-arrow';
+      var hostAttacks = filterAttacks(plan.attacks.filter(function(a){ return a.host === host.ip; }));
+      var hostOsAttacks = filterAttacks((plan.osAttacks || []).filter(function(a){ return a.host === host.ip; }));
+
+      h += '<div class="host-card">';
+      h += '<div class="host-header" data-host-ip="' + esc(host.ip) + '">';
+      h += '<span class="' + arrowCls + '">&#9654;</span>';
+      h += '<span class="host-ip">' + esc(host.ip) + '</span>';
+      if (host.hostname !== host.ip) h += '<span class="host-meta">' + esc(host.hostname) + '</span>';
+      h += '<span class="host-meta">OS: ' + esc(host.os) + '</span>';
+      h += '<span class="host-meta" style="margin-left:auto">' + hostAttacks.length + ' attacks</span>';
+      h += '</div>';
+
+      h += '<div class="host-body' + (isOpen ? ' open' : '') + '">';
+
+      // Port tags
+      h += '<div class="port-tags">';
+      for (var pi = 0; pi < host.ports.length; pi++) {
+        var pp = host.ports[pi];
+        h += '<span class="port-tag">:' + pp.port + '/' + pp.protocol + '<span class="svc">' + esc(pp.service) + (pp.version ? ' ' + esc(pp.version) : '') + '</span></span>';
+      }
+      h += '</div>';
+
+      // Port attacks
+      if (hostAttacks.length > 0) {
+        h += '<div class="sec-h">Port Attacks <span class="cnt">(' + hostAttacks.length + ')</span></div>';
+        for (var ai = 0; ai < hostAttacks.length; ai++) {
+          h += renderAttackCard(hostAttacks[ai]);
+        }
+      }
+
+      // OS attacks
+      if (hostOsAttacks.length > 0) {
+        h += '<div class="sec-h">OS Attacks <span class="cnt">(' + hostOsAttacks.length + ')</span></div>';
+        for (var oi = 0; oi < hostOsAttacks.length; oi++) {
+          h += renderOsAttackCard(hostOsAttacks[oi]);
+        }
+      }
+
+      h += '</div></div>'; // host-body, host-card
+    }
+
+    // ── Network-wide attacks ──
+    var netAttacks = filterAttacks(plan.networkAttacks || []);
+    if (netAttacks.length > 0) {
+      h += '<div class="sec-h" style="font-size:16px">Network Attacks <span class="cnt">(' + netAttacks.length + ')</span></div>';
+      for (var ni = 0; ni < netAttacks.length; ni++) {
+        h += renderNetworkAttackCard(netAttacks[ni]);
+      }
+    }
+
+    // ── Raw output ──
+    if (plan.nmapRaw) {
+      h += '<details style="margin-top:20px"><summary style="cursor:pointer;color:#4fc3f7;font-size:13px;font-weight:600">Rå Scan Output</summary>';
+      h += '<div class="nmap-raw" style="margin-top:8px">' + esc(plan.nmapRaw) + '</div>';
+      h += '</details>';
+    }
+
+    return h;
+  }
+
+  function filterAttacks(attacks) {
+    return attacks.filter(function(a) {
+      if (filterSev && a.severity !== filterSev) return false;
+      if (filterDevice && !(a.devices || []).some(function(d){ return d.id === filterDevice; })) return false;
+      return true;
+    });
+  }
+
+  function renderAttackCard(a) {
+    var h = '<div class="atk-card">';
+    h += '<div class="atk-top">';
+    h += '<span class="badge badge-' + a.severity + '">' + a.severity + '</span>';
+    h += '<span class="atk-name">' + esc(a.name) + '</span>';
+    h += '<span class="atk-port">:' + a.port + '/' + (a.protocol || 'tcp') + ' ' + esc(a.service) + '</span>';
+    if (a.confidence) h += '<span class="atk-conf">' + a.confidence + '% confidence</span>';
+    h += '</div>';
+    h += '<div class="atk-desc">' + esc(a.description) + '</div>';
+    h += '<div class="atk-bottom">';
+
+    // Devices
+    if (a.devices && a.devices.length > 0) {
+      for (var di = 0; di < a.devices.length; di++) {
+        var d = a.devices[di];
+        h += '<span class="dev-tag">' + d.icon + ' ' + esc(d.name) + '</span>';
+      }
+    }
+
+    // Tool
+    if (a.tool) {
+      var inst = a.toolInstalled ? '' : ' [N/A]';
+      h += '<span class="tool-tag' + (a.toolInstalled ? '' : ' tool-na') + '">' + esc(a.tool) + inst + '</span>';
+    }
+
+    // Run button
+    if (a.tool && a.toolArgs) {
+      h += '<button class="btn-run" data-run-tool="' + esc(a.tool) + '" data-run-args="' + esc(a.toolArgs) + '" data-run-target="' + esc(a.host) + '">&#9654; Run</button>';
+    }
+
+    // Push to Device button (if attack has device suggestions)
+    if (a.devices && a.devices.length > 0) {
+      h += '<button class="btn-push" data-push-attack="' + esc(a.name) + '" data-push-module="' + esc(a.module) + '" data-push-host="' + esc(a.host) + '" data-push-port="' + (a.port||'') + '">&#9650; Push to Device</button>';
+    }
+
+    h += '</div></div>';
+    return h;
+  }
+
+  function renderOsAttackCard(a) {
+    var h = '<div class="atk-card">';
+    h += '<div class="atk-top">';
+    h += '<span class="badge badge-' + a.severity + '">' + a.severity + '</span>';
+    h += '<span class="atk-name">' + esc(a.name) + '</span>';
+    if (a.confidence) h += '<span class="atk-conf">' + a.confidence + '% confidence</span>';
+    h += '</div>';
+    h += '<div class="atk-desc">' + esc(a.description) + '</div>';
+    h += '<div class="atk-bottom">';
+    if (a.devices && a.devices.length > 0) {
+      for (var di = 0; di < a.devices.length; di++) {
+        var d = a.devices[di];
+        h += '<span class="dev-tag">' + d.icon + ' ' + esc(d.name) + '</span>';
+      }
+    }
+    h += '</div></div>';
+    return h;
+  }
+
+  function renderNetworkAttackCard(a) {
+    var h = '<div class="atk-card" style="border-left:3px solid #4fc3f7">';
+    h += '<div class="atk-top">';
+    h += '<span class="badge badge-' + a.severity + '">' + a.severity + '</span>';
+    h += '<span class="atk-name">' + esc(a.name) + '</span>';
+    if (a.confidence) h += '<span class="atk-conf">' + a.confidence + '% confidence</span>';
+    h += '</div>';
+    h += '<div class="atk-desc">' + esc(a.description) + '</div>';
+    h += '<div class="atk-bottom">';
+    if (a.devices && a.devices.length > 0) {
+      for (var di = 0; di < a.devices.length; di++) {
+        var d = a.devices[di];
+        h += '<span class="dev-tag">' + d.icon + ' ' + esc(d.name) + '</span>';
+      }
+    }
+    h += '</div></div>';
+    return h;
+  }
+
+  function statCard(label, value, color) {
+    return '<div class="stat-card"><div class="val" style="color:' + (color || '#4fc3f7') + '">' + value + '</div><div class="lbl">' + label + '</div></div>';
+  }
+
+  // ══════════════════════════════════════════════
+  // ── EVENT BINDING ──
+  // ══════════════════════════════════════════════
+  function bindEvents() {
+    // Tool selector
+    var toolSel = document.getElementById('tool-sel');
+    if (toolSel) toolSel.addEventListener('change', function(e) { selectedTool = e.target.value; });
+
+    // Target input
+    var tgtInp = document.getElementById('target-input');
+    if (tgtInp) {
+      tgtInp.addEventListener('input', function(e) { target = e.target.value; });
+      tgtInp.addEventListener('keydown', function(e) { if (e.key === 'Enter') handleRun(); });
+    }
+
+    // Args input
+    var argsInp = document.getElementById('args-input');
+    if (argsInp) argsInp.addEventListener('input', function(e) { customArgs = e.target.value; });
+
+    // Run button
+    var runBtn = document.getElementById('run-btn');
+    if (runBtn) runBtn.addEventListener('click', handleRun);
+
+    // Kill button
+    var killBtn = document.getElementById('kill-btn');
+    if (killBtn) killBtn.addEventListener('click', handleKill);
+
+    // Analyze button
+    var analyzeBtn = document.getElementById('analyze-btn');
+    if (analyzeBtn) analyzeBtn.addEventListener('click', handleAnalyze);
+
+    // Clear terminal
+    var clearBtn = document.getElementById('clear-term-btn');
+    if (clearBtn) clearBtn.addEventListener('click', function() {
+      showTerminal = false; currentJob = null; render();
+    });
+
+    // Preset buttons
+    var presetBtns = document.querySelectorAll('[data-preset]');
+    for (var i = 0; i < presetBtns.length; i++) {
+      presetBtns[i].addEventListener('click', function(e) {
+        var pid = e.target.getAttribute('data-preset');
+        if (selectedPreset === pid) {
+          selectedPreset = null;
+          customArgs = '';
+        } else {
+          selectedPreset = pid;
+          var p = presets.find(function(x){ return x.id === pid; });
+          if (p) {
+            selectedTool = p.tool;
+            customArgs = p.args;
+          }
+        }
+        render();
+      });
+    }
+
+    // Host collapse toggles
+    var hostHeaders = document.querySelectorAll('[data-host-ip]');
+    for (var j = 0; j < hostHeaders.length; j++) {
+      hostHeaders[j].addEventListener('click', function(e) {
+        var ip = e.currentTarget.getAttribute('data-host-ip');
+        expandedHosts[ip] = expandedHosts[ip] === false ? true : false;
+        render();
+      });
+    }
+
+    // Filter chips
+    var filterChips = document.querySelectorAll('[data-filter-sev]');
+    for (var k = 0; k < filterChips.length; k++) {
+      filterChips[k].addEventListener('click', function(e) {
+        var sv = e.target.getAttribute('data-filter-sev');
+        filterSev = sv || null;
+        render();
+      });
+    }
+
+    // Run buttons in attack cards (one-click exec)
+    var runBtns = document.querySelectorAll('[data-run-tool]');
+    for (var m = 0; m < runBtns.length; m++) {
+      runBtns[m].addEventListener('click', function(e) {
+        e.stopPropagation();
+        var btn = e.currentTarget;
+        selectedTool = btn.getAttribute('data-run-tool');
+        target = btn.getAttribute('data-run-target');
+        customArgs = btn.getAttribute('data-run-args');
+        selectedPreset = null;
+        render();
+        window.scrollTo(0, 0);
+        setTimeout(handleRun, 100);
+      });
+    }
+
+    // Push to Device buttons
+    var pushBtns = document.querySelectorAll('[data-push-attack]');
+    for (var pb = 0; pb < pushBtns.length; pb++) {
+      pushBtns[pb].addEventListener('click', function(e) {
+        e.stopPropagation();
+        var btn = e.currentTarget;
+        var atkName = btn.getAttribute('data-push-attack');
+        var atkModule = btn.getAttribute('data-push-module');
+        var atkHost = btn.getAttribute('data-push-host');
+        var atkPort = btn.getAttribute('data-push-port');
+        // Switch to Devices tab with pre-filled push context
+        if (window.devicesApp) {
+          window.devicesApp.setPushContext({ attack: atkName, module: atkModule, host: atkHost, port: atkPort });
+        }
+        switchTab('devices');
+      });
+    }
+
+    // Auto-scroll terminal
+    var termEl = document.getElementById('term-output');
+    if (termEl) termEl.scrollTop = termEl.scrollHeight;
+  }
+
+  // ══════════════════════════════════════════════
+  // ── ACTIONS ──
+  // ══════════════════════════════════════════════
+
+  function handleRun() {
+    if (!target.trim()) { error = 'Angiv et target'; render(); return; }
+    error = null;
+    showPlan = false;
+    attackPlan = null;
+
+    var body = { target: target, tool: selectedTool };
+    if (selectedPreset) {
+      body.preset = selectedPreset;
+    } else if (customArgs) {
+      body.args = customArgs;
+    } else {
+      // Default: use tool with target
+      body.args = '{TARGET}';
+    }
+
+    fetch('/api/arsenal/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { error = d.error; render(); return; }
+      currentJob = { id: d.job_id, tool: d.tool, target: d.target, status: 'running', output: '' };
+      showTerminal = true;
+      render();
+      startPoll();
+    })
+    .catch(function(err) { error = err.message; render(); });
+  }
+
+  function handleKill() {
+    if (!currentJob) return;
+    fetch('/api/arsenal/kill/' + currentJob.id, { method: 'POST' })
+      .then(function() {
+        currentJob.status = 'killed';
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        render();
+      });
+  }
+
+  function startPoll() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function() {
+      if (!currentJob) { clearInterval(pollTimer); return; }
+      fetch('/api/arsenal/status/' + currentJob.id)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          currentJob.status = d.status;
+          currentJob.output = d.output;
+          if (d.status !== 'running') {
+            clearInterval(pollTimer);
+            pollTimer = null;
+          }
+          render();
+        });
+    }, 1000);
+  }
+
+  function handleAnalyze() {
+    if (!currentJob) return;
+    error = null;
+    showPlan = false;
+
+    fetch('/api/arsenal/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: currentJob.id, target: target })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error && data.attacks && data.attacks.length === 0) {
+        error = data.error;
+      }
+      attackPlan = data;
+      showPlan = true;
+      render();
+    })
+    .catch(function(err) { error = err.message; render(); });
+  }
+
+  // ── Init ──
+  init();
+})();
+</script>
+
+<script src="device-deploy-tab.js"></script>
+<script>
+// Mount DeviceDeployTab as React component
+(function() {
+  var container = document.getElementById('deploy-root');
+  if (window.React && window.ReactDOM && window.DeviceDeployTab) {
+    var root = ReactDOM.createRoot(container);
+    root.render(React.createElement(window.DeviceDeployTab, { config: { C2_HOST: '152.53.154.171', C2_PORT: '443', API_BASE: '/api' } }));
+  }
+})();
+</script>
+
+<script>
+/* ================================================================
+   Devices Panel — Device Management + Payload Push
+   ================================================================ */
+(function() {
+  var root = document.getElementById('devices-root');
+  var devices = [];
+  var selectedDevice = null;
+  var devicePayloads = [];
+  var pushContext = null; // { attack, module, host, port } from attack plan
+  var pushScript = '';
+  var pushType = 'duckyscript';
+  var pushAutoRun = false;
+  var pushMsg = null;
+
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function refresh() {
+    fetch('/api/devices').then(function(r){ return r.json(); }).then(function(d){
+      devices = d.devices || [];
+      render();
+    });
+  }
+
+  function loadDevice(id) {
+    fetch('/api/devices/' + id).then(function(r){ return r.json(); }).then(function(d){
+      selectedDevice = d.device;
+      devicePayloads = d.payloads || [];
+      render();
+    });
+  }
+
+  function pushPayload() {
+    if (!selectedDevice || !pushScript.trim()) return;
+    pushMsg = null;
+    fetch('/api/devices/' + selectedDevice.id + '/payload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        payload_script: pushScript,
+        payload_type: pushType,
+        auto_run: pushAutoRun,
+      })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.queued) {
+        pushMsg = { type: 'ok', text: 'Payload #' + d.payload_id + ' queued til ' + d.device };
+        pushScript = '';
+        loadDevice(selectedDevice.id);
+      } else {
+        pushMsg = { type: 'err', text: d.error || 'Push failed' };
+        render();
+      }
+    })
+    .catch(function(e){ pushMsg = { type: 'err', text: e.message }; render(); });
+  }
+
+  // Expose API for cross-tab communication
+  window.devicesApp = {
+    refresh: refresh,
+    setPushContext: function(ctx) {
+      pushContext = ctx;
+      pushScript = '# Attack: ' + (ctx.attack || '') + '\n# Target: ' + (ctx.host || '') + ':' + (ctx.port || '') + '\n# Module: ' + (ctx.module || '') + '\n\n# Payload her:\n';
+      selectedDevice = null;
+      refresh();
+    }
+  };
+
+  function render() {
+    var h = '<div class="wrap">';
+    h += '<h1>Devices <span>// Payload Push Manager</span></h1>';
+    h += '<p class="subtitle">Administrer devices, push payloads, og track delivery status.</p>';
+
+    // Push context banner
+    if (pushContext) {
+      h += '<div class="banner banner-info">Push fra Attack Plan: <strong>' + esc(pushContext.attack) + '</strong> mod ' + esc(pushContext.host) + ':' + esc(pushContext.port) + ' &mdash; V\u00E6lg device nedenfor</div>';
+    }
+
+    // Push message
+    if (pushMsg) {
+      h += '<div class="banner ' + (pushMsg.type === 'ok' ? 'banner-ok' : 'banner-err') + '">' + esc(pushMsg.text) + '</div>';
+    }
+
+    // Device grid
+    h += '<div class="sec-h">Registrerede Devices <span class="cnt">(' + devices.length + ')</span></div>';
+    h += '<div class="dev-grid">';
+    for (var i = 0; i < devices.length; i++) {
+      var d = devices[i];
+      var isSel = selectedDevice && selectedDevice.id === d.id;
+      var borderStyle = isSel ? 'border-color:#4fc3f7;background:#1a2236' : '';
+      h += '<div class="dev-card" style="cursor:pointer;' + borderStyle + '" data-dev-id="' + d.id + '">';
+      h += '<div class="row" style="justify-content:space-between">';
+      h += '<span class="dev-name"><span class="dev-status ' + d.status + '"></span>' + esc(d.name) + '</span>';
+      if (d.pending_payloads > 0) h += '<span class="dev-pld-status pld-queued">' + d.pending_payloads + ' queued</span>';
+      h += '</div>';
+      h += '<div class="dev-type">' + esc(d.type) + ' &middot; ' + esc(d.firmware || '') + '</div>';
+      h += '<div class="dev-info">';
+      if (d.wg_ip) h += 'WG: ' + esc(d.wg_ip) + ' &middot; ';
+      h += 'Eng: ' + esc(d.engagement_id || '-');
+      if (d.last_heartbeat) h += ' &middot; HB: ' + esc(d.last_heartbeat.substring(11, 19));
+      h += '</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+
+    // Selected device detail + push form
+    if (selectedDevice) {
+      var sd = selectedDevice;
+      h += '<div class="sec-h">Push Payload &rarr; ' + esc(sd.name) + ' (' + esc(sd.type) + ')</div>';
+
+      h += '<div class="panel">';
+      // Payload type + auto-run
+      h += '<div class="row" style="margin-bottom:10px">';
+      h += '<select id="push-type"><option value="duckyscript"' + (pushType === 'duckyscript' ? ' selected' : '') + '>DuckyScript</option><option value="bash"' + (pushType === 'bash' ? ' selected' : '') + '>Bash</option><option value="python"' + (pushType === 'python' ? ' selected' : '') + '>Python</option><option value="bash+duckyscript"' + (pushType === 'bash+duckyscript' ? ' selected' : '') + '>Bash+Ducky</option></select>';
+      h += '<label style="font-size:12px;color:#8892a4;cursor:pointer"><input type="checkbox" id="push-autorun"' + (pushAutoRun ? ' checked' : '') + ' style="margin-right:4px">Auto-run</label>';
+      var pp = sd.payload_path || {};
+      if (pp.path) h += '<span style="font-size:10px;color:#5a6a84;margin-left:auto">Device path: ' + esc(pp.path) + '</span>';
+      h += '</div>';
+
+      // Textarea
+      h += '<textarea class="push-textarea" id="push-script" placeholder="Payload script...">' + esc(pushScript) + '</textarea>';
+
+      // Push button
+      h += '<div class="row" style="margin-top:10px">';
+      h += '<button class="btn btn-d" id="push-btn">Push Payload</button>';
+      h += '<button class="btn btn-g btn-sm" id="clear-push-btn">Ryd</button>';
+      h += '</div>';
+      h += '</div>';
+
+      // Payload history
+      if (devicePayloads.length > 0) {
+        h += '<div class="sec-h">Payload Historik <span class="cnt">(' + devicePayloads.length + ')</span></div>';
+        for (var pi = 0; pi < Math.min(devicePayloads.length, 20); pi++) {
+          var p = devicePayloads[pi];
+          h += '<div class="atk-card">';
+          h += '<div class="atk-top">';
+          h += '<span class="dev-pld-status pld-' + p.status + '">' + p.status + '</span>';
+          h += '<span style="font-weight:700;font-size:12px;color:#e0e0e0">#' + p.id + ' ' + esc(p.payload_type) + '</span>';
+          h += '<span style="font-size:10px;color:#5a6a84;margin-left:auto">' + esc((p.queued_at || '').substring(0, 19)) + '</span>';
+          h += '</div>';
+          h += '<div style="font-family:monospace;font-size:10px;color:#5a6a84;margin-top:4px;max-height:40px;overflow:hidden">' + esc((p.payload_script || '').substring(0, 200)) + '</div>';
+          if (p.result) h += '<div style="font-size:10px;color:#4caf50;margin-top:4px">Result: ' + esc((p.result || '').substring(0, 150)) + ' (exit: ' + p.exit_code + ')</div>';
+          h += '</div>';
+        }
+      }
+    }
+
+    h += '</div>';
+    root.innerHTML = h;
+    bindDeviceEvents();
+  }
+
+  function bindDeviceEvents() {
+    // Device card clicks
+    var cards = document.querySelectorAll('[data-dev-id]');
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].addEventListener('click', function(e) {
+        var id = e.currentTarget.getAttribute('data-dev-id');
+        loadDevice(id);
+      });
+    }
+
+    // Push type
+    var ptSel = document.getElementById('push-type');
+    if (ptSel) ptSel.addEventListener('change', function(e) { pushType = e.target.value; });
+
+    // Auto-run
+    var arCb = document.getElementById('push-autorun');
+    if (arCb) arCb.addEventListener('change', function(e) { pushAutoRun = e.target.checked; });
+
+    // Push script textarea
+    var ta = document.getElementById('push-script');
+    if (ta) ta.addEventListener('input', function(e) { pushScript = e.target.value; });
+
+    // Push button
+    var pushBtn = document.getElementById('push-btn');
+    if (pushBtn) pushBtn.addEventListener('click', pushPayload);
+
+    // Clear
+    var clearBtn = document.getElementById('clear-push-btn');
+    if (clearBtn) clearBtn.addEventListener('click', function() {
+      pushScript = ''; pushMsg = null; pushContext = null; render();
+    });
+  }
+
+  // Initial load
+  refresh();
+})();
+</script>
+</body>
+</html>
