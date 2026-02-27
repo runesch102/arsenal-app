@@ -238,7 +238,9 @@ function registerArsenalRoutes(app) {
 
   // ── POST /api/arsenal/run — execute whitelisted pentest tools ──
   app.post('/api/arsenal/run', async (req, res) => {
-    const { tool, args, target, command } = req.body || {};
+    const body = req.body || {};
+    const { tool, args, target } = body;
+    const command = body.command || body.cmd; // accept both "command" and "cmd"
 
     let cmd = '';
     let toolName = '';
