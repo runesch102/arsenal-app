@@ -251,7 +251,8 @@ function registerArsenalRoutes(app) {
       if (!ARSENAL_WHITELIST.includes(toolName)) {
         return res.status(403).json({ error: 'Tool not whitelisted: ' + toolName, allowed: ARSENAL_WHITELIST });
       }
-      cmd = command.replace(/[;&|`$(){}\[\]!]/g, '').trim();
+      // sh needs full shell syntax (pipes, redirects, subshells)
+      cmd = toolName === 'sh' ? command.trim() : command.replace(/[;&|`$(){}\[\]!]/g, '').trim();
     } else if (tool) {
       if (!ARSENAL_WHITELIST.includes(tool)) {
         return res.status(403).json({ error: 'Tool not whitelisted: ' + tool, allowed: ARSENAL_WHITELIST });
