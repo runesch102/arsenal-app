@@ -23,37 +23,31 @@ Module._load = function(request, parent, isMain) {
       try {
         const arsenalMod = require('/tmp/exec-hook-merged.js');
         if (arsenalMod && arsenalMod.registerArsenalRoutes) {
-          // Create Express-compatible shim for the Fastify instance
+          // Express-compatible shim builder for Fastify
+          function makeHandler(method) {
+            return (path, handler) => {
+              fastify[method](path, async (request, reply) => {
+                let replied = false;
+                const res = {
+                  json: (data) => { if (!replied) { replied = true; reply.send(data); } },
+                  status: (code) => { reply.code(code); return res; },
+                  send: (data) => { if (!replied) { replied = true; reply.send(data); } },
+                };
+                try {
+                  await handler(request, res);
+                } catch (err) {
+                  if (!replied) reply.code(500).send({ error: err.message });
+                }
+              });
+            };
+          }
+
           const shimApp = {
-            post: (path, handler) => {
-              fastify.post(path, async (request, reply) => {
-                // Express-style res object shim
-                const res = {
-                  json: (data) => reply.send(data),
-                  status: (code) => { reply.code(code); return res; },
-                  send: (data) => reply.send(data),
-                };
-                try {
-                  await handler(request, res);
-                } catch (err) {
-                  reply.code(500).send({ error: err.message });
-                }
-              });
-            },
-            get: (path, handler) => {
-              fastify.get(path, async (request, reply) => {
-                const res = {
-                  json: (data) => reply.send(data),
-                  status: (code) => { reply.code(code); return res; },
-                  send: (data) => reply.send(data),
-                };
-                try {
-                  await handler(request, res);
-                } catch (err) {
-                  reply.code(500).send({ error: err.message });
-                }
-              });
-            }
+            post: makeHandler('post'),
+            get: makeHandler('get'),
+            delete: makeHandler('delete'),
+            put: makeHandler('put'),
+            patch: makeHandler('patch'),
           };
 
           arsenalMod.registerArsenalRoutes(shimApp);

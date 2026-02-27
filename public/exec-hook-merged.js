@@ -6,8 +6,21 @@
 // ── Server-side: Express routes for /api/arsenal/analyze ──
 // This section is loaded by the backend (Node.js / Express)
 
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 const net = require('net');
+
+// Arsenal job tracking (in-memory, survives until container restart)
+const arsenalJobs = new Map();
+let arsenalJobCounter = 0;
+
+// Tool whitelist — only these binaries can be executed via /api/arsenal/run
+const ARSENAL_WHITELIST = [
+  'nmap','hydra','tcpdump','masscan','nikto','gobuster','ffuf','sqlmap',
+  'curl','dig','whois','ping','traceroute','netcat','nc','ncat',
+  'wget','openssl','ssh','sshpass','arp-scan','nbtscan',
+  'enum4linux','smbclient','rpcclient','snmpwalk','onesixtyone',
+  'dirb','wpscan','theHarvester','dnsrecon','fierce','sublist3r',
+];
 
 const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
 
@@ -142,8 +155,10 @@ function tcpScan(host, ports, timeout) {
   })));
 }
 
-// Register Arsenal analyze route on an Express app
+// Register all Arsenal routes on an Express-compatible app
 function registerArsenalRoutes(app) {
+
+  // ── POST /api/arsenal/analyze — scan target + generate attack plan ──
   app.post('/api/arsenal/analyze', async (req, res) => {
     const { target, scanOutput } = req.body;
 
@@ -155,7 +170,6 @@ function registerArsenalRoutes(app) {
     let scanMethod = 'nmap';
     let hosts = [];
 
-    // If pre-parsed scan output is provided, use it directly (skip nmap)
     if (scanOutput) {
       nmapOutput = scanOutput;
       scanMethod = 'provided';
@@ -220,6 +234,101 @@ function registerArsenalRoutes(app) {
       summary: { totalHosts: hosts.length, totalAttacks: attacks.length, ...counts },
       scanMethod, nmapRaw: nmapOutput,
     });
+  });
+
+  // ── POST /api/arsenal/run — execute whitelisted pentest tools ──
+  app.post('/api/arsenal/run', async (req, res) => {
+    const { tool, args, target, command } = req.body || {};
+
+    let cmd = '';
+    let toolName = '';
+
+    if (command) {
+      toolName = command.trim().split(/\s+/)[0];
+      if (!ARSENAL_WHITELIST.includes(toolName)) {
+        return res.status(403).json({ error: 'Tool not whitelisted: ' + toolName, allowed: ARSENAL_WHITELIST });
+      }
+      cmd = command.replace(/[;&|`$(){}\[\]!]/g, '').trim();
+    } else if (tool) {
+      if (!ARSENAL_WHITELIST.includes(tool)) {
+        return res.status(403).json({ error: 'Tool not whitelisted: ' + tool, allowed: ARSENAL_WHITELIST });
+      }
+      toolName = tool;
+      const safeArgs = (args || '').replace(/[;&|`$(){}\[\]!]/g, '').trim();
+      const safeTarget = (target || '').replace(/[;&|`$(){}\[\]!]/g, '').trim();
+      cmd = [tool, safeArgs, safeTarget].filter(Boolean).join(' ');
+    } else {
+      return res.status(400).json({ error: 'Provide "command" or "tool"+"args"+"target"' });
+    }
+
+    if (!cmd) return res.status(400).json({ error: 'Empty command' });
+
+    const jobId = ++arsenalJobCounter;
+    const job = {
+      id: jobId, tool: toolName, command: cmd,
+      target: target || '', status: 'running', output: '',
+      started_at: new Date().toISOString(), completed_at: null,
+    };
+    arsenalJobs.set(jobId, job);
+
+    const proc = spawn('sh', ['-c', 'stdbuf -oL ' + cmd], { timeout: 300000 });
+    job._proc = proc;
+
+    proc.stdout.on('data', (d) => { job.output += d.toString(); });
+    proc.stderr.on('data', (d) => { job.output += d.toString(); });
+    proc.on('close', (code) => {
+      job.status = code === 0 ? 'done' : 'error';
+      job.completed_at = new Date().toISOString();
+      delete job._proc;
+    });
+    proc.on('error', (e) => {
+      job.output += '\n[ERROR] ' + e.message;
+      job.status = 'error';
+      job.completed_at = new Date().toISOString();
+      delete job._proc;
+    });
+
+    res.json({ id: jobId, status: 'running', tool: toolName, command: cmd });
+  });
+
+  // ── GET /api/arsenal/status/:id — poll job output ──
+  app.get('/api/arsenal/status/:id', async (req, res) => {
+    const id = parseInt(req.params.id);
+    const job = arsenalJobs.get(id);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    res.json({
+      id: job.id, tool: job.tool, command: job.command, target: job.target,
+      status: job.status, output: job.output, length: job.output.length,
+      started_at: job.started_at, completed_at: job.completed_at,
+    });
+  });
+
+  // ── GET /api/arsenal/history — list all arsenal jobs ──
+  app.get('/api/arsenal/history', async (req, res) => {
+    const jobs = Array.from(arsenalJobs.values())
+      .map(j => ({
+        id: j.id, tool: j.tool, command: j.command, target: j.target,
+        status: j.status, output_size: j.output.length,
+        started_at: j.started_at, completed_at: j.completed_at,
+      }))
+      .sort((a, b) => b.id - a.id);
+    res.json(jobs);
+  });
+
+  // ── GET /api/arsenal/installed — check which tools are available ──
+  app.get('/api/arsenal/installed', async (req, res) => {
+    const tools = ARSENAL_WHITELIST.map(t => {
+      let installed = false;
+      let version = '';
+      try {
+        execSync('which ' + t, { timeout: 3000, encoding: 'utf-8' });
+        installed = true;
+        try { version = execSync(t + ' --version 2>&1 | head -1', { timeout: 3000, encoding: 'utf-8' }).trim(); }
+        catch(e) { try { version = execSync(t + ' -V 2>&1 | head -1', { timeout: 3000, encoding: 'utf-8' }).trim(); } catch(e2) { version = 'installed'; } }
+      } catch(e) { /* not installed */ }
+      return { name: t, installed, version };
+    });
+    res.json({ tools, total: tools.length, installed: tools.filter(t => t.installed).length });
   });
 }
 
