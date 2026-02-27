@@ -159,16 +159,22 @@ for (const f of serverFiles) {
 
   let s = fs.readFileSync(f, 'utf-8');
 
-  // Find FRONTEND_GZ_B64
-  const startMarker = "FRONTEND_GZ_B64='";
-  const startIdx = s.indexOf(startMarker);
+  // Find FRONTEND_GZ_B64 (supports both single and double quotes)
+  let startMarker = 'FRONTEND_GZ_B64="';
+  let quoteChar = '"';
+  let startIdx = s.indexOf(startMarker);
+  if (startIdx < 0) {
+    startMarker = "FRONTEND_GZ_B64='";
+    quoteChar = "'";
+    startIdx = s.indexOf(startMarker);
+  }
   if (startIdx < 0) {
     console.log('ERROR: FRONTEND_GZ_B64 not found in', f);
     continue;
   }
 
   const b64Start = startIdx + startMarker.length;
-  const b64End = s.indexOf("'", b64Start);
+  const b64End = s.indexOf(quoteChar, b64Start);
   if (b64End < 0) {
     console.log('ERROR: Could not find end of FRONTEND_GZ_B64 in', f);
     continue;
