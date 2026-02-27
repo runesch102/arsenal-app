@@ -15,6 +15,7 @@ let arsenalJobCounter = 0;
 
 // Tool whitelist — only these binaries can be executed via /api/arsenal/run
 const ARSENAL_WHITELIST = [
+  'sh',
   'nmap','hydra','tcpdump','masscan','nikto','gobuster','ffuf','sqlmap',
   'curl','dig','whois','ping','traceroute','netcat','nc','ncat',
   'wget','openssl','ssh','sshpass','arp-scan','nbtscan',
