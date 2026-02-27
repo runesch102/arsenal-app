@@ -145,47 +145,54 @@ function tcpScan(host, ports, timeout) {
 // Register Arsenal analyze route on an Express app
 function registerArsenalRoutes(app) {
   app.post('/api/arsenal/analyze', async (req, res) => {
-    const { target } = req.body;
+    const { target, scanOutput } = req.body;
 
-    if (!target) {
-      return res.status(400).json({ error: 'Target is required' });
-    }
-
-    if (!/^[a-zA-Z0-9._:-]+$/.test(target)) {
-      return res.status(400).json({ error: 'Invalid target format' });
+    if (!target && !scanOutput) {
+      return res.status(400).json({ error: 'Target or scanOutput is required' });
     }
 
     let nmapOutput = '';
     let scanMethod = 'nmap';
     let hosts = [];
 
-    try {
-      nmapOutput = execSync(
-        `nmap -sV -T4 --open -Pn ${target}`,
-        { timeout: 120000, encoding: 'utf-8' }
-      );
-    } catch (err) {
-      nmapOutput = err.stdout || err.stderr || '';
-    }
+    // If pre-parsed scan output is provided, use it directly (skip nmap)
+    if (scanOutput) {
+      nmapOutput = scanOutput;
+      scanMethod = 'provided';
+      hosts = parseNmapOutput(nmapOutput);
+    } else {
+      if (!/^[a-zA-Z0-9._:-]+$/.test(target)) {
+        return res.status(400).json({ error: 'Invalid target format' });
+      }
 
-    hosts = parseNmapOutput(nmapOutput);
-
-    if (hosts.length === 0 || hosts.every(h => h.ports.length === 0)) {
-      scanMethod = 'tcp-connect';
-      const scanPorts = Object.keys(portServiceMap).map(Number);
       try {
-        const results = await tcpScan(target, scanPorts, 3000);
-        const openPorts = results.filter(r => r.open);
-        if (openPorts.length > 0) {
-          hosts = [{
-            ip: target, hostname: target, os: 'Unknown',
-            ports: openPorts.map(r => ({
-              port: r.port, protocol: 'tcp', state: 'open',
-              service: portServiceMap[r.port] || 'unknown', version: '',
-            })),
-          }];
-        }
-      } catch (err) { /* TCP scan failed */ }
+        nmapOutput = execSync(
+          `nmap -sV -T4 --open -Pn ${target}`,
+          { timeout: 120000, encoding: 'utf-8' }
+        );
+      } catch (err) {
+        nmapOutput = err.stdout || err.stderr || '';
+      }
+
+      hosts = parseNmapOutput(nmapOutput);
+
+      if (hosts.length === 0 || hosts.every(h => h.ports.length === 0)) {
+        scanMethod = 'tcp-connect';
+        const scanPorts = Object.keys(portServiceMap).map(Number);
+        try {
+          const results = await tcpScan(target, scanPorts, 3000);
+          const openPorts = results.filter(r => r.open);
+          if (openPorts.length > 0) {
+            hosts = [{
+              ip: target, hostname: target, os: 'Unknown',
+              ports: openPorts.map(r => ({
+                port: r.port, protocol: 'tcp', state: 'open',
+                service: portServiceMap[r.port] || 'unknown', version: '',
+              })),
+            }];
+          }
+        } catch (err) { /* TCP scan failed */ }
+      }
     }
 
     if (hosts.length === 0) {
@@ -462,3 +469,4 @@ module.exports = {
   ArsenalExecTab,
   ARSENAL_FRONTEND_HTML,
 };
+
