@@ -372,6 +372,20 @@ const ARSENAL_FRONTEND_HTML = `
   .arsenal-wrap .badge-medium { background: #ffd700; }
   .arsenal-wrap .badge-low { background: #4caf50; }
   .arsenal-wrap .nmap-raw { background: #0d1220; border: 1px solid #1e2940; border-radius: 8px; padding: 16px; margin-top: 28px; font-family: monospace; font-size: 12px; color: #5a6a84; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+  /* Injection Panel */
+  .inject-panel { background: #141a2a; border: 1px solid #1e2940; border-radius: 8px; padding: 20px; margin-top: 32px; }
+  .inject-panel h2 { font-size: 18px; color: #10b981; margin-bottom: 16px; }
+  .inject-panel .inject-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .inject-panel select { padding: 10px 14px; border-radius: 6px; border: 1px solid #2a3550; background: #0d1220; color: #e0e0e0; font-size: 14px; min-width: 180px; }
+  .inject-panel .inject-btn { padding: 10px 24px; border-radius: 6px; border: none; background: #10b981; color: #0a0e17; font-weight: 700; font-size: 14px; cursor: pointer; }
+  .inject-panel .inject-btn:disabled { background: #2a3550; cursor: wait; }
+  .inject-panel .inject-status { margin-top: 12px; padding: 12px 16px; border-radius: 6px; font-size: 13px; }
+  .inject-panel .inject-ready { background: #0d1220; border: 1px solid #2a3550; color: #5a6a84; }
+  .inject-panel .inject-running { background: #1a2236; border: 1px solid #10b981; color: #10b981; }
+  .inject-panel .inject-done { background: #0d2818; border: 1px solid #10b981; color: #4ade80; }
+  .inject-panel .inject-error { background: #2a1015; border: 1px solid #ff4444; color: #ff6b6b; }
+  .inject-panel .inject-progress { height: 4px; background: #1e2940; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .inject-panel .inject-progress-bar { height: 100%; background: #10b981; border-radius: 2px; transition: width 0.3s; }
 </style>
 <div class="arsenal-wrap" id="arsenal-root"></div>
 <script>
@@ -518,6 +532,143 @@ const ARSENAL_FRONTEND_HTML = `
   }
 
   render();
+})();
+</script>
+
+<!-- ═══ Injection Panel ═══ -->
+<div class="inject-panel" id="inject-panel-root"></div>
+<script>
+(function() {
+  var root = document.getElementById('inject-panel-root');
+  var devices = [];
+  var templates = [];
+  var selectedDevice = '';
+  var selectedTemplate = '';
+  var injectState = 'ready'; // ready | injecting | done | error
+  var injectMsg = '';
+  var injectJobId = null;
+  var pollTimer = null;
+
+  function getToken() {
+    try { return localStorage.getItem('token') || ''; } catch(e) { return ''; }
+  }
+
+  function authHeaders() {
+    return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() };
+  }
+
+  function loadDevices() {
+    fetch('/api/devices', { headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { devices = Array.isArray(d) ? d : []; renderPanel(); })
+      .catch(function() {});
+  }
+
+  function loadTemplates() {
+    fetch('/api/payload-templates', { headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { templates = Array.isArray(d) ? d : []; renderPanel(); })
+      .catch(function() {});
+  }
+
+  function renderPanel() {
+    var h = '<h2>Injection Panel</h2>';
+    h += '<div class="inject-row">';
+    h += '<select id="inject-device"><option value="">Vælg device...</option>';
+    for (var i = 0; i < devices.length; i++) {
+      var d = devices[i];
+      h += '<option value="' + d.id + '"' + (selectedDevice == d.id ? ' selected' : '') + '>' + escH(d.name) + ' (' + escH(d.type) + ')' + (d.status === 'online' ? ' ●' : '') + '</option>';
+    }
+    h += '</select>';
+    h += '<select id="inject-template"><option value="">Vælg template...</option>';
+    for (var j = 0; j < templates.length; j++) {
+      var t = templates[j];
+      h += '<option value="' + escH(t.id) + '"' + (selectedTemplate === t.id ? ' selected' : '') + '>' + escH(t.name) + '</option>';
+    }
+    h += '</select>';
+    h += '<button class="inject-btn" id="inject-go"' + (injectState === 'injecting' ? ' disabled' : '') + '>' + (injectState === 'injecting' ? 'Injecting…' : 'Inject') + '</button>';
+    h += '</div>';
+
+    // Status
+    var cls = 'inject-ready';
+    var msg = 'Ready — vælg device og template';
+    if (injectState === 'injecting') { cls = 'inject-running'; msg = 'Injecting… ' + (injectMsg || 'Sender payload til device'); }
+    else if (injectState === 'done') { cls = 'inject-done'; msg = 'Done — ' + (injectMsg || 'Payload leveret'); }
+    else if (injectState === 'error') { cls = 'inject-error'; msg = 'Error — ' + (injectMsg || 'Injection fejlede'); }
+    h += '<div class="inject-status ' + cls + '">' + escH(msg) + '</div>';
+
+    if (injectState === 'injecting') {
+      h += '<div class="inject-progress"><div class="inject-progress-bar" style="width:60%;animation:pulse 1.5s infinite"></div></div>';
+    } else if (injectState === 'done') {
+      h += '<div class="inject-progress"><div class="inject-progress-bar" style="width:100%"></div></div>';
+    }
+
+    root.innerHTML = h;
+
+    // Bind
+    var devSel = document.getElementById('inject-device');
+    var tplSel = document.getElementById('inject-template');
+    var goBtn = document.getElementById('inject-go');
+    if (devSel) devSel.addEventListener('change', function(e) { selectedDevice = e.target.value; });
+    if (tplSel) tplSel.addEventListener('change', function(e) { selectedTemplate = e.target.value; });
+    if (goBtn) goBtn.addEventListener('click', doInject);
+  }
+
+  function doInject() {
+    if (!selectedDevice || !selectedTemplate) { injectState = 'error'; injectMsg = 'Vælg device og template først'; renderPanel(); return; }
+    injectState = 'injecting';
+    injectMsg = 'Sender payload...';
+    renderPanel();
+
+    fetch('/api/inject', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ device_id: parseInt(selectedDevice), template_id: selectedTemplate, engagement_id: 1 })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { injectState = 'error'; injectMsg = data.error; renderPanel(); return; }
+      injectJobId = data.job_id;
+      if (data.status === 'completed') {
+        injectState = 'done'; injectMsg = 'Payload leveret via ' + (data.strategy || 'direct'); renderPanel();
+      } else {
+        injectMsg = 'Job #' + data.job_id + ' — ' + (data.status || 'assigned') + ' via ' + (data.strategy || 'agent');
+        pollInjectStatus();
+        renderPanel();
+      }
+    })
+    .catch(function(err) { injectState = 'error'; injectMsg = err.message; renderPanel(); });
+  }
+
+  function pollInjectStatus() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function() {
+      fetch('/api/inject/jobs?limit=1&status=', { headers: authHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(jobs) {
+          if (!Array.isArray(jobs)) return;
+          var job = jobs.find(function(j) { return j.id === injectJobId; });
+          if (!job) return;
+          if (job.status === 'completed') {
+            injectState = 'done'; injectMsg = 'Payload leveret til ' + (job.device_name || 'device');
+            clearInterval(pollTimer); renderPanel();
+          } else if (job.status === 'failed') {
+            injectState = 'error'; injectMsg = job.error || 'Injection fejlede';
+            clearInterval(pollTimer); renderPanel();
+          } else {
+            injectMsg = 'Job #' + job.id + ' — ' + job.status;
+            renderPanel();
+          }
+        });
+    }, 2000);
+  }
+
+  function escH(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+
+  // Init
+  loadDevices();
+  loadTemplates();
+  renderPanel();
 })();
 </script>
 `;
