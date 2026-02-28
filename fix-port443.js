@@ -1,4 +1,5 @@
-// fix-port443.js - Remove PORT_443_LISTENER block from server.js
+// fix-port443.js v2 - Remove PORT_443_LISTENER block from server.js
+// Preserves the closing }); of the app.listen callback
 const fs = require('fs');
 const FILE = '/data/server-v4.3.js';
 
@@ -11,45 +12,51 @@ try {
     process.exit(0);
   }
   
-  // Find the start: the comment line
-  let start = s.indexOf('// PORT_443_LISTENER');
-  // Go back to include the empty line before it
-  start = s.lastIndexOf('\n', start);
+  // Find the PORT_443_LISTENER block
+  let commentIdx = s.indexOf('// PORT_443_LISTENER');
+  let blockStart = s.lastIndexOf('\n', commentIdx); // newline before comment
   
-  // Find the end: after https443.listen(...) and the closing }
-  let end = s.indexOf('https443.listen(', start);
-  if (end < 0) {
-    console.log('[FIX] WARNING: PORT_443_LISTENER marker found but no https443.listen - trying alternate removal');
-    // Just remove the comment line
-    let lineEnd = s.indexOf('\n', s.indexOf('PORT_443_LISTENER'));
-    s = s.substring(0, start) + s.substring(lineEnd);
+  // Find the end of the block: the if-block closing }
+  let listenIdx = s.indexOf('https443.listen(', commentIdx);
+  if (listenIdx < 0) {
+    console.log('[FIX] WARNING: PORT_443_LISTENER found but no https443.listen');
+    // Remove just the comment line
+    let lineEnd = s.indexOf('\n', commentIdx);
+    s = s.substring(0, blockStart) + s.substring(lineEnd);
     fs.writeFileSync(FILE, s);
-    console.log('[FIX] Removed PORT_443_LISTENER comment line. New size:', s.length);
+    console.log('[FIX] Removed comment line. New size:', s.length);
     process.exit(0);
   }
   
-  // Find the closing } of the if block (it's on its own line after https443.listen)
-  let afterListen = s.indexOf('\n', end);
-  if (afterListen < 0) afterListen = s.length;
-  
-  // The closing } should be the next non-empty line
+  // Find the closing } of the if block
+  // It should be on its own line after https443.listen
+  let afterListen = s.indexOf('\n', listenIdx);
   let closeBrace = s.indexOf('\n}', afterListen);
+  
   if (closeBrace >= 0) {
-    end = closeBrace + 2; // include \n}
+    // Remove from blockStart to closeBrace+2 (including \n})
+    // IMPORTANT: Keep everything after the closing brace (the }); etc)
+    let blockEnd = closeBrace + 2;
+    let removed = s.substring(blockStart, blockEnd);
+    console.log('[FIX] Removing', removed.length, 'chars');
+    s = s.substring(0, blockStart) + s.substring(blockEnd);
   } else {
-    // Fallback: just go to the } after the listen line
-    end = s.indexOf('}', afterListen);
-    if (end >= 0) end += 1;
-    else end = afterListen;
+    console.log('[FIX] WARNING: could not find closing brace, doing minimal removal');
+    let blockEnd = afterListen;
+    s = s.substring(0, blockStart) + s.substring(blockEnd);
   }
   
-  let removed = s.substring(start, end);
-  console.log('[FIX] Removing block (' + removed.length + ' chars):');
-  console.log(removed.substring(0, 200) + (removed.length > 200 ? '...' : ''));
-  
-  s = s.substring(0, start) + s.substring(end);
   fs.writeFileSync(FILE, s);
-  console.log('[FIX] SUCCESS! New file size:', s.length);
+  console.log('[FIX] SUCCESS! New size:', s.length);
+  
+  // Verify: check if the file still has proper structure
+  if (!s.includes('});')) {
+    console.log('[FIX] WARNING: file may be missing closing });');
+    // Add it back
+    s = s.trimEnd() + '\n});\n';
+    fs.writeFileSync(FILE, s);
+    console.log('[FIX] Added missing }); - Final size:', s.length);
+  }
 } catch (e) {
   console.error('[FIX] ERROR:', e.message);
   process.exit(1);
